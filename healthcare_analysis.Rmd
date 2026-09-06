@@ -1,0 +1,293 @@
+---
+title: "Diabetic Data Analysis"
+author: "Kardin Nguyen"
+date: "August 2026"
+output: html_document
+---
+
+# Overview
+
+This project aims to identify factors associated with 30-day US hospital readmission from 1999 to 2008 among diabetic patients and develop an appropriate logistic regression model. The analysis includes data cleaning, variable selection, model diagnostics, and comparison of alternative models to identify a model that provides a balance between predictive performance, statistical inference, and parsimony.
+
+The original dataset was cleaned and prepared using MySQL and was imported 
+into R for analysis.
+
+# 1. Preparation
+
+## Installing Packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+data <- read_csv("~/Desktop/Coding Data Files/R/Readmission Project/diabetes+130-us+hospitals+for+years+1999-2008/diabetic_data_clean.csv")
+```
+
+```{r, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+library(caret)
+
+library(pROC)
+
+library(PRROC)
+
+library(car)
+
+library(knitr)
+```
+
+## Factoring categorical variables
+
+```{r}
+data[] <- lapply(data, function(x) {
+  if (is.character(x)) factor(x) else x
+})
+
+data$admission_type_id <- factor(data$admission_type_id)
+data$discharge_disposition_id <- factor(data$discharge_disposition_id)
+data$admission_source_id <- factor(data$admission_source_id)
+data$readmitted <- factor(data$readmitted)
+```
+
+# 2. Variable Selection
+
+## Modeling with all variables
+
+```{r, echo=TRUE, results='hide', warning=FALSE}
+model_all <- glm(readmitted ~ ., data = data, family = binomial)
+```
+
+## Modeling with variables guided by domain knowledge
+
+```{r, echo=TRUE, results='hide', warning=FALSE}
+model_candidate <- glm(readmitted ~ race + age_decade + gender + time_in_hospital + admission_type_id + admission_source_id + discharge_disposition_id + number_inpatient + number_outpatient + number_emergency + number_diagnoses + num_lab_procedures + num_procedures + num_medications + insulin + change + A1Cresult + diabetesMed + diag_1 + diag_2 + diag_3, data = data, family = binomial)
+```
+
+## Modeling with K-fold using model_all
+
+
+```{r}
+set.seed(123)
+
+train_index <- sample(
+  seq_len(nrow(data)),
+  size = 0.80 * nrow(data)
+)
+
+train <- data[train_index, ]
+test <- data[-train_index, ]
+
+```
+
+```{r, echo=TRUE, results='hide', warning=FALSE}
+train_control <- trainControl(
+  method = "cv",
+  number = 5
+)
+
+model_all_train <- train(
+  readmitted ~ .,
+  data = train,
+  method = "glm",
+  family = binomial(),
+  trControl = train_control
+)
+```
+
+## Modeling with K-fold using model_candidate
+
+```{r, echo=TRUE, results='hide', warning=FALSE}
+train_control <- trainControl(
+  method = "cv",
+  number = 5
+)
+
+model_candidate_train <- train(
+  formula(model_candidate),
+  data = train,
+  method = "glm",
+  family = binomial(),
+  trControl = train_control
+)
+```
+
+## Weighing response variable
+
+Because readmission was relatively uncommon (~11%), class imbalance was handled by class-weighted logistic regression for model_all and model_candidate.
+
+```{r}
+weights <- ifelse(
+  data$readmitted == 1,
+  1 / mean(data$readmitted == 1),
+  1 / mean(data$readmitted == 0)
+)
+```
+
+```{r, echo=TRUE, results='hide', warning=FALSE}
+model_all_weighted <- glm(
+  formula(model_all),
+  data = data,
+  family = binomial,
+  weights = weights
+)
+```
+
+```{r, echo=TRUE, results='hide', warning=FALSE}
+model_candidate_weighted <- glm(
+  formula(model_candidate),
+  data = data,
+  family = binomial,
+  weights = weights
+)
+```
+
+Modeling with lasso regression was considered but will not be used as it generally would not be helpful for inference.
+
+# 3. Model Diagnostics
+
+## Comparing AIC values
+
+```{r}
+AIC(model_all)
+AIC(model_candidate)
+AIC(model_all_train$finalModel)
+AIC(model_candidate_train$finalModel)
+AIC(model_all_weighted)
+AIC(model_candidate_weighted)
+```
+
+Because model_all_train and model_candidate_train were trained on a different subset of the data, their AIC values are not directly comparable to the AIC values of model_all and model_candidate.
+
+## Checking VIF values
+
+```{r, echo=TRUE, results='hide'}
+options(scipen = 999)
+vif(model_all)
+vif(model_candidate)
+vif(model_all_train$finalModel)
+vif(model_candidate_train$finalModel)
+vif(model_all_weighted)
+vif(model_candidate_weighted)
+```
+
+The adjusted GVIF values do not suggest any substantial multicollinearity among the predictors.
+
+# 4. Model Evaluation
+
+## For model_all_train and model_candidate_train
+
+```{r}
+test_prob <- predict(
+  model_candidate_train,
+  newdata = test,
+  type = "prob"
+)[, "1"]
+
+```
+
+## For remaining models
+
+```{r}
+model_final_train <- model_candidate
+```
+
+```{r}
+test_prob <- predict(
+  model_final_train,
+  newdata = test,
+  type = "response"
+)
+
+```
+
+```{r, message=FALSE}
+roc_test <- roc(
+  test$readmitted,
+  test_prob
+)
+
+auc(roc_test)
+
+```
+
+Increased threshold to examine sensitivity and specificity as a result of imbalance and relatively high cost of diabetes treatment (less false positives).
+
+```{r}
+test_pred <- ifelse(test_prob >= 0.6, 1, 0)
+mean(test_pred == test$readmitted)
+
+confusionMatrix(
+  factor(test_pred),
+  factor(test$readmitted),
+  positive = "1"
+)
+
+```
+
+```{r}
+pr <- pr.curve(
+  scores.class0 = test_prob[test$readmitted == 1],
+  scores.class1 = test_prob[test$readmitted == 0],
+  curve = TRUE
+)
+
+pr$auc.integral
+```
+
+The evaluation was applied to the all other models.
+
+# 5. Inference And Conclusion
+
+```{r, echo=FALSE}
+results <- data.frame(
+  Model = c(
+    "Candidate",
+    "Candidate",
+    "All Variables",
+    "All Variables",
+    "All Variables — 5-Fold CV",
+    "Candidate — 5-Fold CV"
+  ),
+  Weighted = c(
+    "No",
+    "Yes",
+    "No",
+    "Yes",
+    "No",
+    "No"
+  ),
+  ROC_AUC = c(
+    0.6703,
+    0.6726,
+    0.6753,
+    0.6775,
+    0.6659,
+    0.6636
+  ),
+  PR_AUC = c(
+    0.2183,
+    0.2169,
+    0.2201,
+    0.2186,
+    0.2130,
+    0.2147
+  )
+)
+
+kable(
+  results,
+  digits = 4,
+  col.names = c("Model", "Weighted", "ROC-AUC", "PR-AUC")
+)
+
+```
+
+The full-variable model achieved the highest ROC-AUC (0.6775) when class-weighted, and the unweighted full model achieved the highest PR-AUC (0.2201). Class weighting produced a small improvement in ROC-AUC but slightly reduced PR-AUC.
+
+The strongest balance between predictive performance and interpretability was achieved by the non-weighted model_candidate, which had similar PR-AUC score while using substantially fewer predictors than model_all. The non-weighted model_candidate was also preferred because class weighing is primarily used for prediction.
+
+For inference, model_candidate contained several strong variables associated with 30-day readmission. Holding all other variables constant, each additional increase of inpatient visits is associated by the change of 0.264 in log-odds of readmission. Primary, secondary, and additional secondary diagnosis of diseases related to pregnancy also showed association with readmission, where coefficients ranged from -1.149 in additional secondary diagnosis to 0.709 in primary diagnosis relative to their respective categories. And various discharge dispositions showed several associations with 30-day readmission, where 8, 15, and 28 were associated with increases in log-odds of 1.670, 1.845, and 1.742, respectively.
+
+The models had limited prediction performance. The ROC-AUC values ranging from approximately 0.66 to 0.67 were also consistent with ROC-AUC values reported by other studies of the Diabetes 130-US Hospitals dataset. The proportion of readmission (~11%) presents class imbalance challenges, and the dataset additionally does not distinguish from planned and unplanned readmissions, creating unavoidable noise that creates variability and reduces predictive performance. 
+
+While LASSO regression was not used to remain consistent with the goals of this project, incorporating it in the future could potentially improve the model's performance by reducing overfitting. Additionally, weight was excluded from this dataset due to the large proportion of patients with missing measurements. Including this variable could have also improved predictive performance and provide greater insight into factors associated with 30-day readmission.
+
+Overall, the models identified several meaningful associations with 30-day readmission, but their limited discrimination indicates that these variables alone are insufficient for accurate individual-level prediction.
