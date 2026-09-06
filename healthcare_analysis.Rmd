@@ -19,7 +19,7 @@ into R for analysis.
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(readr)
-data <- read_csv("~/Desktop/Coding Data Files/R/Readmission Project/diabetes+130-us+hospitals+for+years+1999-2008/diabetic_data_clean.csv")
+data <- read_csv("./data/diabetic_data_clean.csv")
 ```
 
 ```{r, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
