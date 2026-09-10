@@ -290,6 +290,6 @@ The models had limited prediction performance. The ROC-AUC values ranging from a
 
 Creating a parsimonious model that maintained a strong predictive performance required a tradeoff between model simplicity and predictive performance. Reducing the number of variables improved interpretability, but could also remove effective predictors.
 
-Additionally, LASSO regression was not used to remain consistent with the goals of this project, incorporating it in the future could potentially improve the model's performance by reducing overfitting. Additionally, weight was excluded from this dataset due to the large proportion of patients with missing measurements. Including this variable could have also improved predictive performance and provide greater insight into factors associated with 30-day readmission.
+Additionally, LASSO regression was not used to remain consistent with the goals of this project. Incorporating it in the future could potentially improve the model's performance by reducing overfitting. Additionally, weight was excluded from this dataset due to the large proportion of patients with missing measurements. Including this variable could have also improved predictive performance and provide greater insight into factors associated with 30-day readmission.
 
 Overall, the models identified several meaningful associations with 30-day readmission, but their limited discrimination indicates that these variables alone are insufficient for accurate individual-level prediction.
