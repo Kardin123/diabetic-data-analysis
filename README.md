@@ -1,4 +1,5 @@
 # diabetic-data-analysis
+<<<<<<< HEAD
 ---
 title: "Diabetic Data Analysis"
 author: "Kardin Nguyen"
@@ -292,3 +293,8 @@ The models had limited prediction performance. The ROC-AUC values ranging from a
 While LASSO regression was not used to remain consistent with the goals of this project, incorporating it in the future could potentially improve the model's performance by reducing overfitting. Additionally, weight was excluded from this dataset due to the large proportion of patients with missing measurements. Including this variable could have also improved predictive performance and provide greater insight into factors associated with 30-day readmission.
 
 Overall, the models identified several meaningful associations with 30-day readmission, but their limited discrimination indicates that these variables alone are insufficient for accurate individual-level prediction.
+=======
+## Full Analysis
+
+[View the full analysis with code and output](docs/healthcare_analysis.html)
+>>>>>>> 86a3ae6e8efe13a342531782de9e438957a2b5a3
